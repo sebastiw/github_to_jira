@@ -12,7 +12,7 @@ function _err {
 
 function _help {
     cat <<END
-  Script to convert Github issues toa format mostly recognisable by
+  Script to convert Github issues to a format mostly recognisable by
   Jira CSV-importer.
 
   First run this script, then goto your Jira-project > Issues > "..." >
