@@ -4,6 +4,7 @@ Jira CSV-importer.
 First run this script, then goto your Jira-project > Issues > "..." >
 Import issues from CSV.
 
+```bash
 Usage:
     $(basename "$0")
                 [-h] [-c]
@@ -48,3 +49,4 @@ PARAMETERS
        Instead of fetching Github issues with state OPEN, fetch
        issues with state=CLOSED
        Not recommended.
+```
