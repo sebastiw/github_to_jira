@@ -6,7 +6,7 @@ Import issues from CSV.
 
 ```bash
 Usage:
-    $(basename "$0")
+    github_to_jira.sh
                 [-h] [-c]
                 [-l LABEL]
                 [-j path/to/GITHUB-ISSUES.JSON]
