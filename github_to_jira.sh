@@ -80,8 +80,8 @@ do
             exit 0
             ;;
         l)
-            LABEL_OPTION="--label ${OPTARG}"
-            LABEL_STRING="_${OPTARG}"
+            LABEL_OPTION="--label \"${OPTARG}\" ${LABEL_OPTION}"
+            LABEL_STRING="_${OPTARG}${LABEL_STRING}"
             ;;
         j)
             JSON_FILE="${OPTARG}"
@@ -110,7 +110,7 @@ elif [[ -x "${GH}" ]]
 then
     JSON_FILE="gh_issues${LABEL_STRING}_${IMPORT_TIME}.json"
     "${GH}" issue list \
-          "${LABEL_OPTION}" \
+          ${LABEL_OPTION} \
           --state "${STATE}" \
           --limit 50000 \
           --json assignees,author,body,closed,closedAt,comments,createdAt,id,labels,milestone,number,projectCards,projectItems,reactionGroups,state,title,updatedAt,url \
@@ -124,7 +124,7 @@ NUM_COLUMNS_LABELS=$("${JQ}" '[(.[].labels | length)] | max' "${JSON_FILE}")
 NUM_COLUMNS_COMMENTS=$("${JQ}" '[(.[].comments | length)] | max' "${JSON_FILE}")
 
 # shellcheck disable=SC2016
-JQ_MAPPED_AUTHOR='(if (.author.login | in($logins[0])) then $logins[0][.author.login] else .author.login end)'
+JQ_LOGIN_FILTER=' as $username | if ($username | in($logins[0])) then $logins[0][$username] else $username end'
 
 HEADER="Id,Issue Key,Title,Status,Reporter,Date Created"
 JQ_PREFIX_FIELDS='.id,.number,.title,.state,'"${JQ_MAPPED_AUTHOR}"',.createdAt'
@@ -133,7 +133,7 @@ JQ_ASSIGNEES=""
 for ((i=0; i < NUM_COLUMNS_ASSIGNEES; i++))
 do
     HEADER="${HEADER},Assignee"
-    JQ_ASSIGNEES="${JQ_ASSIGNEES},.assignees[${i}].login"
+    JQ_ASSIGNEES="${JQ_ASSIGNEES},((.assignees[${i}].login//\"\") ${JQ_LOGIN_FILTER})"
 done
 JQ_ASSIGNEES="${JQ_ASSIGNEES:1}"
 
@@ -149,7 +149,7 @@ JQ_COMMENTS=""
 for ((i=0; i < NUM_COLUMNS_COMMENTS; i++))
 do
     HEADER="${HEADER},Comment"
-    JQ_COMMENTS="${JQ_COMMENTS},(if .comments[${i}] then (.comments[${i}] | .createdAt + \";\" + ${JQ_MAPPED_AUTHOR} + \";\" + .body) else null end)"
+    JQ_COMMENTS="${JQ_COMMENTS},(if .comments[${i}] then (.comments[${i}] | .createdAt + \";\" + (.author.login ${JQ_LOGIN_FILTER}) + \";\" + .body) else null end)"
 done
 JQ_COMMENTS="${JQ_COMMENTS:1}"
 
