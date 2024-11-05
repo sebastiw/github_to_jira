@@ -2,7 +2,6 @@
 
 GH=/usr/bin/gh
 IMPORT_TIME="$(date --iso-8601=seconds)"
-STATE=open
 
 function _err {
     local OUT="$1"
@@ -23,7 +22,7 @@ function _help {
                   [-h] [-c]
                   [-l LABEL]
                   [-j path/to/GITHUB-ISSUES.JSON]
-                  [-s path/to/GITHUB-STATES.JSON]
+                  [-s path/to/GITHUB-STATUSES.JSON]
                   [-u path/to/GITHUB-USERS.JSON]
 
   PARAMETERS
@@ -48,15 +47,21 @@ function _help {
          Example:
              { "github-login": "jira-username", "sebastiw": "sebastiw@jira.com" }
 
+     -p <GITHUB PROJECT NAME>:
+         Github project name to map statuses from. Used in conjunction
+         with '-s'.
+         If the Github project is not found in the issue, the Github
+         state (OPEN, CLOSED) will be used instead.
+
      -s <JSON>:
-         JSON-file to map Github states to Jira Statuses; the Github
-         state is the key, and the Jira status is the value.
+         JSON-file to map Github statuses to Jira statuses; the Github
+         status is the key, and the Jira status is the value.
          Beware, if no key is found for a value, then the value will
          be used as is. Meaning: if not mapping is made, then the
-         Github state name will be used.
+         Github status will be used.
 
          Example:
-             { "github-state": "jira-status", "closed": "done" }
+             { "github-status": "jira-status", "CLOSED": "Done" }
 
     -c:
          Instead of fetching Github issues with state OPEN, fetch
@@ -70,9 +75,11 @@ JQ="$(command -v jq)"
 
 JSON_FILE=""
 LOGIN_FILE=""
-STATE_FILE=""
+STATUS_FILE=""
+STATE=open
+LABEL_OPTION=()
 
-while getopts 'hl:j:u:s:c' OPTION
+while getopts 'hl:j:u:p:s:c' OPTION
 do
     case "${OPTION}" in
         h)
@@ -80,7 +87,7 @@ do
             exit 0
             ;;
         l)
-            LABEL_OPTION="--label \"${OPTARG}\" ${LABEL_OPTION}"
+            LABEL_OPTION+=(--label "${OPTARG}")
             LABEL_STRING="_${OPTARG}${LABEL_STRING}"
             ;;
         j)
@@ -89,8 +96,11 @@ do
         u)
             LOGIN_FILE="${OPTARG}"
             ;;
+        p)
+            PROJECT_NAME="${OPTARG}"
+            ;;
         s)
-            STATE_FILE="${OPTARG}"
+            STATUS_FILE="${OPTARG}"
             ;;
         c)
             STATE=closed
@@ -110,7 +120,7 @@ elif [[ -x "${GH}" ]]
 then
     JSON_FILE="gh_issues${LABEL_STRING}_${IMPORT_TIME}.json"
     "${GH}" issue list \
-          ${LABEL_OPTION} \
+          "${LABEL_OPTION[@]}" \
           --state "${STATE}" \
           --limit 50000 \
           --json assignees,author,body,closed,closedAt,comments,createdAt,id,labels,milestone,number,projectCards,projectItems,reactionGroups,state,title,updatedAt,url \
@@ -126,8 +136,17 @@ NUM_COLUMNS_COMMENTS=$("${JQ}" '[(.[].comments | length)] | max' "${JSON_FILE}")
 # shellcheck disable=SC2016
 JQ_LOGIN_FILTER=' as $username | if ($username | in($logins[0])) then $logins[0][$username] else $username end'
 
+# shellcheck disable=SC2016
+JQ_STATUS_FILTER=' as $status | if ($status | in($statuses[0])) then $statuses[0][$status] else $status end'
+
+PROJECT_STATUS=".state"
+if [[ -n "${PROJECT_NAME}" ]]
+then
+    PROJECT_STATUS='(.projectItems[]|select("'"${PROJECT_NAME}"'" == .title)|.status.name) // .state'
+fi
+
 HEADER="Id,Issue Key,Title,Status,Reporter,Date Created"
-JQ_PREFIX_FIELDS='.id,.number,.title,.state,'"${JQ_MAPPED_AUTHOR}"',.createdAt'
+JQ_PREFIX_FIELDS='.id,.number,.title,('"${PROJECT_STATUS}"' '"${JQ_STATUS_FILTER}"'),(.author.login '"${JQ_LOGIN_FILTER}"'),.createdAt'
 
 JQ_ASSIGNEES=""
 for ((i=0; i < NUM_COLUMNS_ASSIGNEES; i++))
@@ -155,17 +174,16 @@ JQ_COMMENTS="${JQ_COMMENTS:1}"
 
 echo "${HEADER}"
 
-SLURP_LOGINS=""
+SLURP_LOGINS=(--argjson logins "[]")
 if [[ -r "${LOGIN_FILE}" ]]
 then
-    SLURP_LOGINS="--slurpfile logins ${LOGIN_FILE}"
+    SLURP_LOGINS=(--slurpfile logins "${LOGIN_FILE}")
 fi
 
-SLURP_STATES=""
-if [[ -r "${STATE_FILE}" ]]
+SLURP_STATUSES=(--argjson statuses "[]")
+if [[ -r "${STATUS_FILE}" ]]
 then
-    SLURP_STATES="--slurpfile states ${STATE_FILE}"
+    SLURP_STATUSES=(--slurpfile statuses "${STATUS_FILE}")
 fi
 
-# shellcheck disable=SC2086
-"${JQ}" -r ${SLURP_LOGINS} ${SLURP_STATES} '.[] | ['"${JQ_PREFIX_FIELDS}"','"${JQ_ASSIGNEES}"','"${JQ_LABELS}"','"${JQ_COMMENTS}"'] | @csv' "${JSON_FILE}"
+"${JQ}" -r "${SLURP_LOGINS[@]}" "${SLURP_STATUSES[@]}" '.[] | ['"${JQ_PREFIX_FIELDS}"','"${JQ_ASSIGNEES}"','"${JQ_LABELS}"','"${JQ_COMMENTS}"'] | @csv' "${JSON_FILE}"
