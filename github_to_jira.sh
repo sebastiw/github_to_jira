@@ -142,7 +142,7 @@ JQ_STATUS_FILTER=' as $status | if ($status | in($statuses[0])) then $statuses[0
 PROJECT_STATUS=".state"
 if [[ -n "${PROJECT_NAME}" ]]
 then
-    PROJECT_STATUS='(.projectItems[]|select("'"${PROJECT_NAME}"'" == .title)|.status.name) // .state'
+    PROJECT_STATUS='((.projectItems[]|select("'"${PROJECT_NAME}"'" == .title)|.status.name) // .state)'
 fi
 
 HEADER="Id,Issue Key,Title,Status,Reporter,Date Created"
