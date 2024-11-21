@@ -72,3 +72,26 @@ STAGE 2 (JIRA/CSV) PARAMETERS
        If the Github project is not found in the issue, the Github
        state (OPEN, CLOSED) will be used instead.
 ```
+
+
+# Extras
+
+`jq` and `csvtool` can be helpful when inspecting and merging json and
+csv files.
+
+e.g.
+```bash
+$ ./github_to_jira.sh -c -d
+gh_issues_closed_2024-11-21T15:22:35+01:00.json
+$ ./github_to_jira.sh -d
+gh_issues_open_2024-11-21T15:24:45+01:00.json
+$ jq -s '.[0] + .[1]' gh_issues_closed_2024-11-21T15:22:35+01:00.json gh_issues_open_2024-11-21T15:24:45+01:00.json > gh_issues_all_$(date --iso-8601=seconds).json
+$ ./github_to_jira.sh -j gh_issues_all_2024-11-21T15:33:15+01:00.json
+jira_issues_2024-11-21T15:48:45+01:00.csv
+$ csvtool col 2,4-5 jira_issues_2024-11-21T15:48:45+01:00.csv | head
+Issue Key,Status,Reporter
+42,CLOSED,sebastiw
+666,DONE,sebastiw
+1337,DONE,sebastiw
+```
+
