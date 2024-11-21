@@ -6,20 +6,41 @@ Import issues from CSV.
 
 ```bash
 Usage:
-    github_to_jira.sh
-                [-h] [-c]
+    ./github_to_jira.sh
+                [-h]
+                [-a ASSIGNEE]
+                [-A AUTHOR]
                 [-l LABEL]
+                [-c] [-d]
                 [-j path/to/GITHUB-ISSUES.JSON]
-                [-s path/to/GITHUB-STATES.JSON]
                 [-u path/to/GITHUB-USERS.JSON]
+                [-s path/to/GITHUB-STATUSES.JSON]
+                [-p GITHUB_PROJECT_NAME]
 
-PARAMETERS
+GENERAL PARAMETERS
    -h: This help-text
+
+STAGE 1 (GITHUB/JSON) PARAMETERS
+   -a <GITHUB ASSIGNEE>:
+       Github assignee to filter on.
+
+   -A <GITHUB AUTHOR>:
+       Github author to filter on.
 
    -l <GITHUB LABEL>:
        Github label to filter on.
        Recommended.
 
+  -c:
+       Instead of fetching Github issues with state OPEN, fetch
+       issues with state=CLOSED
+       Not recommended.
+
+  -d:
+       Download only, do not convert to CSV.
+       Stops script after downloading the Github issues.
+
+STAGE 2 (JIRA/CSV) PARAMETERS
    -j <JSON>:
        Instead of using Github CLI to access and download the
        issues, a previous downloaded file can be used.
@@ -36,17 +57,18 @@ PARAMETERS
            { "github-login": "jira-username", "sebastiw": "sebastiw@jira.com" }
 
    -s <JSON>:
-       JSON-file to map Github states to Jira Statuses; the Github
-       state is the key, and the Jira status is the value.
+       JSON-file to map Github statuses to Jira statuses; the Github
+       status is the key, and the Jira status is the value.
        Beware, if no key is found for a value, then the value will
        be used as is. Meaning: if not mapping is made, then the
-       Github state name will be used.
+       Github status will be used.
 
        Example:
-           { "github-state": "jira-status", "closed": "done" }
+           { "github-status": "jira-status", "CLOSED": "Done" }
 
-  -c:
-       Instead of fetching Github issues with state OPEN, fetch
-       issues with state=CLOSED
-       Not recommended.
+   -p <GITHUB PROJECT NAME>:
+       Github project name to map statuses from. Used in conjunction
+       with '-s'.
+       If the Github project is not found in the issue, the Github
+       state (OPEN, CLOSED) will be used instead.
 ```

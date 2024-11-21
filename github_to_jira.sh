@@ -19,19 +19,41 @@ function _help {
 
   Usage:
       $(basename "$0")
-                  [-h] [-c]
+                  [-h]
+                  [-a ASSIGNEE]
+                  [-A AUTHOR]
                   [-l LABEL]
+                  [-c] [-d]
                   [-j path/to/GITHUB-ISSUES.JSON]
-                  [-s path/to/GITHUB-STATUSES.JSON]
                   [-u path/to/GITHUB-USERS.JSON]
+                  [-s path/to/GITHUB-STATUSES.JSON]
+                  [-p GITHUB_PROJECT_NAME]
 
-  PARAMETERS
+  GENERAL PARAMETERS
      -h: This help-text
+
+
+  STAGE 1 (GITHUB/JSON) PARAMETERS
+     -a <GITHUB ASSIGNEE>:
+         Github assignee to filter on.
+
+     -A <GITHUB AUTHOR>:
+         Github author to filter on.
 
      -l <GITHUB LABEL>:
          Github label to filter on.
          Recommended.
 
+    -c:
+         Instead of fetching Github issues with state OPEN, fetch
+         issues with state=CLOSED
+         Not recommended.
+
+    -d:
+         Download only, do not convert to CSV.
+         Stops script after downloading the Github issues.
+
+  STAGE 2 (JIRA/CSV) PARAMETERS
      -j <JSON>:
          Instead of using Github CLI to access and download the
          issues, a previous downloaded file can be used.
@@ -47,12 +69,6 @@ function _help {
          Example:
              { "github-login": "jira-username", "sebastiw": "sebastiw@jira.com" }
 
-     -p <GITHUB PROJECT NAME>:
-         Github project name to map statuses from. Used in conjunction
-         with '-s'.
-         If the Github project is not found in the issue, the Github
-         state (OPEN, CLOSED) will be used instead.
-
      -s <JSON>:
          JSON-file to map Github statuses to Jira statuses; the Github
          status is the key, and the Jira status is the value.
@@ -63,10 +79,11 @@ function _help {
          Example:
              { "github-status": "jira-status", "CLOSED": "Done" }
 
-    -c:
-         Instead of fetching Github issues with state OPEN, fetch
-         issues with state=CLOSED
-         Not recommended.
+     -p <GITHUB PROJECT NAME>:
+         Github project name to map statuses from. Used in conjunction
+         with '-s'.
+         If the Github project is not found in the issue, the Github
+         state (OPEN, CLOSED) will be used instead.
 END
 }
 
@@ -77,33 +94,59 @@ JSON_FILE=""
 LOGIN_FILE=""
 STATUS_FILE=""
 STATE=open
-LABEL_OPTION=()
+GH_OPTIONS=()
+OUTPUT_FILENAME_STRING=""
+DOWNLOAD_ONLY=false
 
-while getopts 'hl:j:u:p:s:c' OPTION
+while getopts 'a:A:l:cdj:u:p:s:h' OPTION
 do
     case "${OPTION}" in
-        h)
-            _help
-            exit 0
+        ### STAGE 1 (Github) OPTIONS ###
+        a)
+            GH_OPTIONS+=(--assignee "${OPTARG}")
+            OUTPUT_FILENAME_STRING="_${OPTARG}${OUTPUT_FILENAME_STRING}"
             ;;
+
+        A)
+            GH_OPTIONS+=(--author "${OPTARG}")
+            OUTPUT_FILENAME_STRING="_${OPTARG}${OUTPUT_FILENAME_STRING}"
+            ;;
+
         l)
-            LABEL_OPTION+=(--label "${OPTARG}")
-            LABEL_STRING="_${OPTARG}${LABEL_STRING}"
+            GH_OPTIONS+=(--label "${OPTARG}")
+            OUTPUT_FILENAME_STRING="_${OPTARG}${OUTPUT_FILENAME_STRING}"
             ;;
+
+        c)
+            STATE=closed
+            GH_OPTIONS+=(--state "${STATE}")
+            ;;
+
+        d)
+            DOWNLOAD_ONLY=true
+            ;;
+
+        ### STAGE 2 (Jira) OPTIONS ###
         j)
             JSON_FILE="${OPTARG}"
             ;;
+
         u)
             LOGIN_FILE="${OPTARG}"
             ;;
+
         p)
             PROJECT_NAME="${OPTARG}"
             ;;
+
         s)
             STATUS_FILE="${OPTARG}"
             ;;
-        c)
-            STATE=closed
+
+        ### GENERAL OPTIONS ###
+        h)
+            _help
+            exit 0
             ;;
 
         *)
@@ -118,15 +161,20 @@ then
    [[ -r "${JSON_FILE}" ]] || _err "${JSON_FILE} not readable"
 elif [[ -x "${GH}" ]]
 then
-    JSON_FILE="gh_issues${LABEL_STRING}_${IMPORT_TIME}.json"
+    OUTPUT_FILENAME_STRING="_${STATE}${OUTPUT_FILENAME_STRING}"
+    JSON_FILE="gh_issues${OUTPUT_FILENAME_STRING}_${IMPORT_TIME}.json"
     "${GH}" issue list \
-          "${LABEL_OPTION[@]}" \
-          --state "${STATE}" \
+          "${GH_OPTIONS[@]}" \
           --limit 50000 \
           --json assignees,author,body,closed,closedAt,comments,createdAt,id,labels,milestone,number,projectCards,projectItems,reactionGroups,state,title,updatedAt,url \
           > "./${JSON_FILE}"
 else
     _err "Github CLI needed. See https://cli.github.com/manual/"
+fi
+
+if [[ "${DOWNLOAD_ONLY}" == "true" ]]
+then
+    exit 0
 fi
 
 NUM_COLUMNS_ASSIGNEES=$("${JQ}" '[(.[].assignees | length)] | max' "${JSON_FILE}")
